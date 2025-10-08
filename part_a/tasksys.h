@@ -1,6 +1,10 @@
 #ifndef _TASKSYS_H
 #define _TASKSYS_H
 
+#include <queue>
+#include <mutex>
+#include <memory>
+
 #include "itasksys.h"
 
 /*
@@ -34,6 +38,12 @@ class TaskSystemParallelSpawn: public ITaskSystem {
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+
+    private:
+        void parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks);
+
+        // the max number of threads this System can use
+        int max_num_threads_;
 };
 
 /*
@@ -51,6 +61,28 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+    
+    private:
+        void LaunchSpinningThread(int threadId, std::shared_ptr<std::atomic<int>> curr_task_id, std::shared_ptr<std::atomic<int>> task_done);
+
+        // When destroying the thread pool, use these flag to ensure threads exit their
+        // loop and cleanup
+        bool done; 
+
+        // Keep track of all threads launched by this thread pool
+        std::vector<std::thread> threads;
+
+        // Use the `curr_task_id` as an implicit ticket queue from which thread
+        // pickup the next task id to work on
+        std::shared_ptr<std::atomic<int>> curr_task_id;
+        
+        // Task increment this counter when they are done with 1 piece of work
+        std::shared_ptr<std::atomic<int>> task_done;
+
+        // Each call to run() will need to set the runnable and total number of tasks
+        IRunnable *curr_runnable;
+        int  curr_num_total_tasks;
+
 };
 
 /*
@@ -68,6 +100,31 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+
+    private:
+        void LaunchSleepingThread(int threadId, std::shared_ptr<std::atomic<int>> curr_task_id, std::shared_ptr<std::atomic<int>> task_done);
+
+        // When destroying the thread pool, use these flag to ensure threads exit their
+        // loop and cleanup
+        bool done; 
+
+        // Keep track of all threads launched by this thread pool
+        std::vector<std::thread> threads;
+
+        // Use the `curr_task_id` as an implicit ticket queue from which thread
+        // pickup the next task id to work on
+        std::shared_ptr<std::atomic<int>> curr_task_id;
+        
+        // Task increment this counter when they are done with 1 piece of work
+        std::shared_ptr<std::atomic<int>> task_done;
+
+        // 
+        std::condition_variable condVar;
+        std::mutex mtx;
+
+        // Each call to run() will need to set the runnable and total number of tasks
+        IRunnable *curr_runnable;
+        int  curr_num_total_tasks;
 };
 
 #endif
