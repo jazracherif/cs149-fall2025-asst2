@@ -66,7 +66,7 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
         void sync();
     
     private:
-        void LaunchSpinningThread(int threadId, std::shared_ptr<std::atomic<int>> curr_task_id, std::shared_ptr<std::atomic<int>> task_done);
+        void LaunchSpinningThread(int threadId);
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup
@@ -105,7 +105,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         void sync();
 
     private:
-        void LaunchSleepingThread(int threadId, std::shared_ptr<std::atomic<int>> curr_task_id, std::shared_ptr<std::atomic<int>> task_done);
+        void LaunchSleepingThread(int threadId);
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup

@@ -99,9 +99,7 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 }
 
 
-void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId, 
-                            std::shared_ptr<std::atomic<int>> curr_task_id, 
-                            std::shared_ptr<std::atomic<int>> task_done){                                
+void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId){                                
     int next_task = 0;
     while(!done){
         // Wait for work to arrive
@@ -109,6 +107,7 @@ void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId,
             continue;
         
         // loop until no more work left to do
+        int work_done = 0;
         while(!done){
             next_task = curr_task_id->fetch_add(1);
             if (next_task >= curr_num_total_tasks)
@@ -116,8 +115,9 @@ void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId,
             // do one work item and decrement run_done
             curr_runnable->runTask(next_task, curr_num_total_tasks); 
             // mark one task done
-            task_done->fetch_add(1);
+            work_done++;
         }  
+        task_done->fetch_add(work_done);
     }
 }
 
@@ -133,7 +133,7 @@ TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int n
 
     for (int i=0; i < num_threads; i++)
         threads.emplace_back(&TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread, 
-                this, i, std::shared_ptr<std::atomic<int>>(curr_task_id), std::shared_ptr<std::atomic<int>>(task_done));
+                this, i);
 }
 
 TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
@@ -182,9 +182,7 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
 }
 
 
-void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId, 
-                            std::shared_ptr<std::atomic<int>> curr_task_id, 
-                            std::shared_ptr<std::atomic<int>> task_done){                                
+void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId){                                
     // printf("started thread: %d\n", threadId);
     int next_task = 0;
     while(!done){
@@ -195,15 +193,16 @@ void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId,
         lck.unlock();
 
         // Now get to work!
+        int work_done = 0;
         while(!done){
             next_task = curr_task_id->fetch_add(1);
             if (next_task >= curr_num_total_tasks)
                 break;
             // do one work item and decrement run_done
             curr_runnable->runTask(next_task, curr_num_total_tasks); 
-            // mark one done
-            task_done->fetch_add(1);
+            work_done++;
         } 
+        task_done->fetch_add(work_done);
     }
 }
 
@@ -216,8 +215,7 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
     curr_runnable = nullptr;
 
     for (int i=0; i < num_threads; i++)
-        threads.emplace_back(&TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread, 
-                this, i, std::shared_ptr<std::atomic<int>>(curr_task_id), std::shared_ptr<std::atomic<int>>(task_done));
+        threads.emplace_back(&TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread, this, i);
 
 }
 
