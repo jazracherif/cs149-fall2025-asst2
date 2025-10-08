@@ -4,6 +4,9 @@
 #include <queue>
 #include <mutex>
 #include <memory>
+#include <thread>
+#include <condition_variable>
+#include <atomic>
 
 #include "itasksys.h"
 
