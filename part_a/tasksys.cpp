@@ -53,12 +53,6 @@ const char* TaskSystemParallelSpawn::name() {
 
 TaskSystemParallelSpawn::TaskSystemParallelSpawn(int num_threads): ITaskSystem(num_threads), 
     max_num_threads_(num_threads) {
-    //
-    // TODO: CS149 student implementations may decide to perform setup
-    // operations (such as thread pool construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
     
 }
 
@@ -67,19 +61,11 @@ TaskSystemParallelSpawn::~TaskSystemParallelSpawn() {}
 
 void TaskSystemParallelSpawn::parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks){
     for (int i = threadId; i < num_total_tasks; i += max_num_threads_){
-        // printf("[%d], task: %d\n", threadId, i);
         runnable->runTask(i, num_total_tasks);
     }
 }
 
 void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Part A.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
-    // printf("== TaskSystemParallelSpawn =  num_total_tasks: %d\n", num_total_tasks);
-
     std::vector<std::thread> work;
 
     for (int i = 0; i < max_num_threads_; i++){
@@ -116,43 +102,29 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId, 
                             std::shared_ptr<std::atomic<int>> curr_task_id, 
                             std::shared_ptr<std::atomic<int>> task_done){                                
-    // printf("started thread: %d\n", threadId);
     int next_task = 0;
     while(!done){
-        // we have to make sure that the sync function is release when
-        // all the thread are waiting
+        // Wait for work to arrive
         if(curr_task_id->load() >= curr_num_total_tasks)
             continue;
         
-        // exit the spin and do wore
+        // loop until no more work left to do
         while(!done){
             next_task = curr_task_id->fetch_add(1);
             if (next_task >= curr_num_total_tasks)
                 break;
-
             // do one work item and decrement run_done
             curr_runnable->runTask(next_task, curr_num_total_tasks); 
-            // mark one done
+            // mark one task done
             task_done->fetch_add(1);
         }  
     }
-    // printf("Thread exited\n");
 }
 
 
 
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): 
     ITaskSystem(num_threads) {
-    //
-    // TODO: CS149 student implementations may decide to perform setup
-    // operations (such as thread pool construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
-    printf("TaskSystemParallelThreadPoolSpinning(): num_threads:%d\n", num_threads);
-
-    // done.store(false);
-    // run_done.store(0);
 
     curr_task_id = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
     task_done = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
@@ -216,22 +188,17 @@ void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId,
     // printf("started thread: %d\n", threadId);
     int next_task = 0;
     while(!done){
-        // we have to make sure that the sync function is release when
-        // all the thread are waiting
-        // if(curr_task_id->load() >= curr_num_total_tasks)
-        //     continue;
         
+        // Sleep while waiting for new work to arrive, or for Task System shutfown
         std::unique_lock<std::mutex> lck(mtx);
-
         condVar.wait(lck, [&]{ return (done || curr_task_id->load() < curr_num_total_tasks);} );
         lck.unlock();
 
-        // exit the spin and do work
+        // Now get to work!
         while(!done){
             next_task = curr_task_id->fetch_add(1);
             if (next_task >= curr_num_total_tasks)
                 break;
-
             // do one work item and decrement run_done
             curr_runnable->runTask(next_task, curr_num_total_tasks); 
             // mark one done
@@ -242,16 +209,6 @@ void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId,
 
 
 TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads) {
-    //
-    // TODO: CS149 student implementations may decide to perform setup
-    // operations (such as thread pool construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
-    printf("TaskSystemParallelThreadPoolSleeping(): num_threads:%d\n", num_threads);
-
-    // done.store(false);
-    // run_done.store(0);
 
     curr_task_id = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
     task_done = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
@@ -265,26 +222,18 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
 }
 
 TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
-    //
-    // TODO: CS149 student implementations may decide to perform cleanup
-    // operations (such as thread pool shutdown construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
+    // Notify all threads to exit their loops
     done = true;
-    condVar.notify_all();
+    {
+        std::lock_guard<std::mutex> lck(mtx);
+        condVar.notify_all();
+    }    
+    
     for (auto &t: threads)
         t.join();
 }
 
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_total_tasks) {
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Parts A and B.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
-
-    // printf("TaskSystemParallelThreadPoolSleeping::run()\n");
 
     curr_runnable = runnable;
     task_done->store(0);
