@@ -54,20 +54,33 @@ const char* TaskSystemParallelSpawn::name() {
 TaskSystemParallelSpawn::TaskSystemParallelSpawn(int num_threads): ITaskSystem(num_threads), 
     max_num_threads_(num_threads) {
     
+    curr_task_id = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
+
 }
 
 TaskSystemParallelSpawn::~TaskSystemParallelSpawn() {}
 
 
 void TaskSystemParallelSpawn::parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks){
-    for (int i = threadId; i < num_total_tasks; i += max_num_threads_){
-        runnable->runTask(i, num_total_tasks);
+    int next_task = 0;
+
+
+    while (true) {
+        (next_task = curr_task_id->fetch_add(1));   
+        if (next_task >= num_total_tasks)
+            break;
+        runnable->runTask(next_task, num_total_tasks);
     }
+
 }
 
 void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
     std::vector<std::thread> work;
 
+    // printf("TaskSystemParallelSpawn::run()\n");
+    // double start = CycleTimer::currentSeconds();
+
+    curr_task_id->store(0);
     for (int i = 0; i < max_num_threads_; i++){
         work.emplace_back(&TaskSystemParallelSpawn::parallelSpawnWork, this, runnable, i, num_total_tasks);
     }
@@ -75,6 +88,10 @@ void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
     for (std::thread &t: work){
         t.join();
     }
+
+    // double end = CycleTimer::currentSeconds();
+    // printf("total time: %0.03fms\n", (end - start)* 1000);
+
 }
 
 TaskID TaskSystemParallelSpawn::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -101,39 +118,61 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 
 void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId){                                
     int next_task = 0;
+
     while(!done){
         // Wait for work to arrive
-        if(curr_task_id->load() >= curr_num_total_tasks)
+        if(curr_task_id.load() >= curr_num_total_tasks)
             continue;
-        
+
+        // printf("[run-%d][thread-%d] start\n", bulk_run_id, threadId);
+
+        // start_work.store(false);
+
+        // double start = CycleTimer::currentSeconds();
+
         // loop until no more work left to do
         int work_done = 0;
-        while(!done){
-            next_task = curr_task_id->fetch_add(1);
+        while (true) {
+            next_task = curr_task_id.fetch_add(1);
+
             if (next_task >= curr_num_total_tasks)
-                break;
+                break;            
             // do one work item and decrement run_done
             curr_runnable->runTask(next_task, curr_num_total_tasks); 
             // mark one task done
             work_done++;
         }  
-        task_done->fetch_add(work_done);
+
+        // double start = CycleTimer::currentSeconds();
+        task_done.fetch_add(work_done);
+        // thread_done.fetch_add(1);
+
+
+        // double end = CycleTimer::currentSeconds();
+        // printf("[run-%d][thread-%d] took %0.03fms\n", bulk_run_id, threadId, (end - start)* 1000);
+
+        
+        // double end = CycleTimer::currentSeconds();
+        // printf("[%d] worked for %0.03fms\n", threadId, (end - start)* 1000);
+
     }
 }
 
 
 
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): 
-    ITaskSystem(num_threads) {
+    ITaskSystem(num_threads), num_threads_(num_threads) {
 
-    curr_task_id = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
-    task_done = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
+    curr_task_id.store(num_threads_);
+    task_done.store(0);
+    start_work.store(false);
+    thread_done.store(0);
+
     curr_num_total_tasks = 0;
     curr_runnable = nullptr;
 
     for (int i=0; i < num_threads; i++)
-        threads.emplace_back(&TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread, 
-                this, i);
+        threads.emplace_back(&TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread, this, i);
 }
 
 TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
@@ -145,19 +184,28 @@ TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
 void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) {
 
     // printf("TaskSystemParallelThreadPoolSpinning::run() - total_tasks: %d\n", num_total_tasks);
+    // double start = CycleTimer::currentSeconds();
 
+    bulk_run_id++;
     curr_runnable = runnable;
-    task_done->store(0);
+    task_done.store(0);
     curr_num_total_tasks = num_total_tasks;
     // Activate all threasd such that they see their current task id being less 
     // than the total number of tasks 
-    curr_task_id->store(0);
+    thread_done.store(0);
+    curr_task_id.store(0);
+    start_work.store(true);
+
 
     // need to make sure all threads have finished all task
     // use the `done` counter for that
-    while(task_done->load() < num_total_tasks){
+    while(task_done.load() < num_total_tasks){
         continue;
-    }    
+    }
+
+    // double end = CycleTimer::currentSeconds();
+    // printf("[run-%d] total time: %0.03fms\n", bulk_run_id, (end - start)* 1000);
+
 }
 
 TaskID TaskSystemParallelThreadPoolSpinning::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -194,7 +242,7 @@ void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId){
 
         // Now get to work!
         int work_done = 0;
-        while(!done){
+        while(true){
             next_task = curr_task_id->fetch_add(1);
             if (next_task >= curr_num_total_tasks)
                 break;

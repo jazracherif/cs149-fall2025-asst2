@@ -45,6 +45,8 @@ class TaskSystemParallelSpawn: public ITaskSystem {
     private:
         void parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks);
 
+        std::shared_ptr<std::atomic<int>> curr_task_id;
+
         // the max number of threads this System can use
         int max_num_threads_;
 };
@@ -77,14 +79,24 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
 
         // Use the `curr_task_id` as an implicit ticket queue from which thread
         // pickup the next task id to work on
-        std::shared_ptr<std::atomic<int>> curr_task_id;
+        std::atomic<int> curr_task_id;
         
         // Task increment this counter when they are done with 1 piece of work
-        std::shared_ptr<std::atomic<int>> task_done;
+        std::atomic<int> task_done;
+
 
         // Each call to run() will need to set the runnable and total number of tasks
         IRunnable *curr_runnable;
         int  curr_num_total_tasks;
+        int num_threads_;
+
+        double pad[4];
+        int bulk_run_id;
+
+        std::atomic<bool> start_work;
+
+        std::atomic<int> thread_done;
+
 
 };
 
