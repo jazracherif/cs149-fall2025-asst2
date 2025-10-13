@@ -82,22 +82,14 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
         std::atomic<int> curr_task_id;
         
         // Task increment this counter when they are done with 1 piece of work
-        std::atomic<int> task_done;
-
+        std::atomic<int> tasks_completed;
 
         // Each call to run() will need to set the runnable and total number of tasks
         IRunnable *curr_runnable;
         int  curr_num_total_tasks;
-        int num_threads_;
+        int max_num_threads_;
 
-        double pad[4];
         int bulk_run_id;
-
-        std::atomic<bool> start_work;
-
-        std::atomic<int> thread_done;
-
-
 };
 
 /*
@@ -131,7 +123,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         std::shared_ptr<std::atomic<int>> curr_task_id;
         
         // Task increment this counter when they are done with 1 piece of work
-        std::shared_ptr<std::atomic<int>> task_done;
+        std::shared_ptr<std::atomic<int>> tasks_completed;
 
         // 
         std::condition_variable condVar;
