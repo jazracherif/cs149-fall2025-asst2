@@ -281,7 +281,7 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
     TaskID curr_tid = last_task_id;
     last_task_id++;
 
-    printf("TaskSystemParallelThreadPoolSleeping::run - Task: %d\n", curr_tid);
+    // printf("TaskSystemParallelThreadPoolSleeping::run - Task: %d\n", curr_tid);
 
     TaskRef task = Task::create(curr_tid, runnable, num_total_tasks, {});
     task->set_state(TaskState::RUNNING);
