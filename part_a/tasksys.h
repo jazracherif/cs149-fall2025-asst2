@@ -120,14 +120,14 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
 
         // Use the `curr_task_id` as an implicit ticket queue from which thread
         // pickup the next task id to work on
-        std::shared_ptr<std::atomic<int>> curr_task_id;
+        std::atomic<int> curr_task_id;
         
         // Task increment this counter when they are done with 1 piece of work
-        std::shared_ptr<std::atomic<int>> tasks_completed;
+        std::atomic<int> tasks_completed;
 
         // 
-        std::condition_variable condVar;
-        std::mutex mtx;
+        std::condition_variable condVarThreads;
+        std::mutex threads_mtx;
 
         // Each call to run() will need to set the runnable and total number of tasks
         IRunnable *curr_runnable;

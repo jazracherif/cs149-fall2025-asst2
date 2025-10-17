@@ -223,29 +223,29 @@ void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId){
     while(!done){
         
         // Sleep while waiting for new work to arrive, or for Task System shutfown
-        std::unique_lock<std::mutex> lck(mtx);
-        condVar.wait(lck, [&]{ return (done || curr_task_id->load() < curr_num_total_tasks);} );
+        std::unique_lock<std::mutex> lck(threads_mtx);
+        condVarThreads.wait(lck, [&]{ return (done || curr_task_id.load() < curr_num_total_tasks);} );
         lck.unlock();
 
         // Now get to work!
         int work_done = 0;
         while(true){
-            next_task = curr_task_id->fetch_add(1);
+            next_task = curr_task_id.fetch_add(1);
             if (next_task >= curr_num_total_tasks)
                 break;
             // do one work item and decrement run_done
             curr_runnable->runTask(next_task, curr_num_total_tasks); 
             work_done++;
         } 
-        tasks_completed->fetch_add(work_done);
+        tasks_completed.fetch_add(work_done);
     }
 }
 
 
 TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(get_max_thread_pool_size(num_threads)) {
 
-    curr_task_id = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
-    tasks_completed = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
+    curr_task_id.store(0);
+    tasks_completed.store(0);
     curr_num_total_tasks = 0;
     curr_runnable = nullptr;
 
@@ -258,10 +258,10 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
     // Notify all threads to exit their loops
     done = true;
     {
-        std::lock_guard<std::mutex> lck(mtx);
-        condVar.notify_all();
+        std::lock_guard<std::mutex> lck(threads_mtx);
+        condVarThreads.notify_all();
     }    
-    
+        
     for (auto &t: threads)
         t.join();
 }
@@ -269,19 +269,19 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_total_tasks) {
 
     curr_runnable = runnable;
-    tasks_completed->store(0);
+    tasks_completed.store(0);
     curr_num_total_tasks = num_total_tasks;
     // Activate all threasd such that they see their current task id being less 
     // than the total number of tasks 
-    curr_task_id->store(0);
+    curr_task_id.store(0);
     {
-        std::lock_guard<std::mutex> lck(mtx);
-        condVar.notify_all();
+        std::lock_guard<std::mutex> lck(threads_mtx);
+        condVarThreads.notify_all();
     }
 
     // need to make sure all threads have finished all task
     // use the `done` counter for that
-    while(tasks_completed->load() < num_total_tasks){
+    while(tasks_completed.load() < num_total_tasks){
         continue;
     }
 
