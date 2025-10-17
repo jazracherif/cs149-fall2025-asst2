@@ -145,16 +145,7 @@ void TaskSystemParallelThreadPoolSpinning::LaunchSpinningThread(int threadId){
             work_done++;
         }  
 
-        // double start = CycleTimer::currentSeconds();
         tasks_completed.fetch_add(work_done);
-
-        // double end = CycleTimer::currentSeconds();
-        // printf("[run-%d][thread-%d] took %0.03fms\n", bulk_run_id, threadId, (end - start)* 1000);
-
-        
-        // double end = CycleTimer::currentSeconds();
-        // printf("[%d] worked for %0.03fms\n", threadId, (end - start)* 1000);
-
     }
 }
 

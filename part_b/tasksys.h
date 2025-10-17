@@ -152,6 +152,8 @@ class Task {
         // The total number of tasks to run
         int num_total_tasks_;
 
+        bool complete_notification_sent{false};
+
     private:
         Task(TaskID id, IRunnable *runnable, int num_total_tasks, std::unordered_set<TaskID> deps): 
             id_(id), runnable_(runnable), num_total_tasks_(num_total_tasks), state_(TaskState::UNINITIALIZED), 

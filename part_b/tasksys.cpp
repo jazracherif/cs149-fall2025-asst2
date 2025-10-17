@@ -189,7 +189,7 @@ bool TaskSystemParallelThreadPoolSleeping::handle_task_done(TaskID task_done){
         task->deps().erase(task_done);
         // if a task has no more dependencies left, schedule it
         if (task->deps().size() == 0){
-            // printf("Tasks: %d has no more dependencies, schedule it!\n",(*iter)->id());
+            // printf("Tasks: %d has no more dependencies, schedule it!\n", task->id());
             waiting_tasks.erase(task->id());
             task->set_state(TaskState::RUNNING);
             running_tasks[task->id()] = task;
@@ -255,9 +255,11 @@ void TaskSystemParallelThreadPoolSleeping::LaunchSleepingThread(int threadId){
             //         next_task->is_task_completed());
 
             // notify main thread that a task was completed            
-            if (!current_task_ref->in_done_state() && current_task_ref->is_task_completed()){ 
-                // printf("[thread-%d] - task %d completed\n", threadId, current_task_ref->id());
+            if (current_task_ref->is_task_completed() && !current_task_ref->complete_notification_sent 
+                    && !current_task_ref->in_done_state()){ 
                 std::unique_lock<std::mutex> lck(sync_mtx);
+                // printf("[thread-%d] - task %d completed, send notification\n", threadId, current_task_ref->id());
+                current_task_ref->complete_notification_sent = true;
                 current_task_ref->set_state(TaskState::DONE);
                 task_completed_queue.emplace_back(current_task_ref->id());
                 lck.unlock();
@@ -276,15 +278,14 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
 
 
     // There can be onnly 1 task in the running queue
-    TaskID curr_tid = 0;
-    // double start = CycleTimer::currentSeconds();
+    TaskID curr_tid = last_task_id;
+    last_task_id++;
 
-    // printf("TaskSystemParallelThreadPoolSleeping::run - Task: %d\n", curr_tid);
+    printf("TaskSystemParallelThreadPoolSleeping::run - Task: %d\n", curr_tid);
 
     TaskRef task = Task::create(curr_tid, runnable, num_total_tasks, {});
     task->set_state(TaskState::RUNNING);
 
-    // printf("TaskRef %p created\n", task.get());
     // add task to queues
 
     running_tasks[curr_tid] = task;
@@ -298,22 +299,8 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
 
         // printf("Add task %d to queue %d\n", curr_tid, qid);
     }
-    // double end_q = CycleTimer::currentSeconds();
-    // printf("run() for task %d - up to enqueues took %.03fms\n", last_task_id, (end_q - start) * 1000);
-
-    
-    // std::unique_lock<std::mutex> lck(threads_mtx);
-    
-    // double end_notify = CycleTimer::currentSeconds();
-    // printf("run() for task %d - up to notify threads took %.03fms\n", last_task_id, (end_notify - start) * 1000);
-
-    // need to make sure all threads have finished all task
-    // use the `done` counter for that
+   
     sync();
-
-    // double end = CycleTimer::currentSeconds();
-    // printf("run() for task %d took %.03fms\n", last_task_id, (end - start) * 1000);
-
 }
 
 
@@ -331,7 +318,7 @@ bool TaskSystemParallelThreadPoolSleeping::process_dependencies(TaskRef task, st
 
         // Check if dependent task is still running
         auto task_it = running_tasks.find(tid);    
-        if (task_it != running_tasks.end() && task_it->second->state() != TaskState::DONE){
+        if (task_it != running_tasks.end()){
             // dependent task is currently running
             can_run = false;
             running = true;
@@ -438,31 +425,39 @@ void TaskSystemParallelThreadPoolSleeping::sync() {
     // double start = CycleTimer::currentSeconds();
 
     // std::unique_lock<std::mutex> lck(sync_mtx);
-    while(!done){        
-        std::unique_lock<std::mutex> lck(sync_mtx);
-        sync_condVar.wait(lck, [&]{ 
-                return done || task_completed_queue.size() != 0; });
-        lck.unlock();
+    std::unique_lock<std::mutex> sync_lck(sync_mtx, std::defer_lock);
 
-        bool notify_threads = false;
-        // For each completed tasks, update the state and schedule some new tasks
+    while(!done){        
+
+        // Wait on work to be completed by the worker threads
+        sync_lck.lock();
+        sync_condVar.wait(sync_lck, [&]{ 
+                return done || task_completed_queue.size() != 0; });
+
+        bool notify_threads = false;        
         TaskID tid_completed = task_completed_queue.front();
+        task_completed_queue.pop_front();
+
+        sync_lck.unlock();
+
+
         // printf("Sync - Got task %d completed\n", tid_completed);
 
-        task_completed_queue.pop_front();
-        
+        // Clear state for completed tasks
         auto it = running_tasks.find(tid_completed);
         if (it != running_tasks.end()){
-            (*it).second->set_state(TaskState::DONE);
+            // (*it).second->set_state(TaskState::DONE);
             notify_threads = handle_task_done(tid_completed);
             running_tasks.erase(it);
         }
-
+        
         if (notify_threads){
-            for (int i =0; i < num_threads_; i++)
+            for (int i = 0; i < num_threads_; i++)
                 condVarThreads[i].notify_one();
         }
         
+        // printf("Sync thread - Waiting: %ld running: %ld\n", waiting_tasks.size(), running_tasks.size());
+        // We are done when there are no more running tasks and waiting tasks
         if (waiting_tasks.size() == 0 && running_tasks.size() == 0){
             // printf("All done!\n");
             break;    
