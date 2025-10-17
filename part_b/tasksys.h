@@ -154,19 +154,18 @@ class Task {
 
     private:
         Task(TaskID id, IRunnable *runnable, int num_total_tasks, std::unordered_set<TaskID> deps): 
-            id_(id), runnable_(runnable), num_total_tasks_(num_total_tasks), deps_(deps) {}
-
+            id_(id), runnable_(runnable), num_total_tasks_(num_total_tasks), state_(TaskState::UNINITIALIZED), 
+            deps_(deps)  {}
 
         // The state of the task
         TaskState state_;   
-
     
         // The dependency for this task
         std::unordered_set<TaskID> deps_;
 
         // keep track of work done on this task
-        std::atomic<int> curr_task_id_;
-        std::atomic<int> tasks_completed_;
+        std::atomic<int> curr_task_id_{0};
+        std::atomic<int> tasks_completed_{0};
     };
 
 
@@ -230,7 +229,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup
-        bool done; 
+        bool done{false}; 
 
         struct paddedMutex{
             std::mutex m;
