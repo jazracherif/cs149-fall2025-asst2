@@ -200,54 +200,46 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         void sync();
 
     private:
-        int num_threads_;
-
-        TaskID last_task_id{0};
-
-         // for modifying the shared task states across threads
-        std::mutex q_mtx;
-
-        std::unordered_set<TaskID> waiting_tasks; // in order of call to runAsync
-        // std::vector<Task> running_tasks; // threads can pickup any work from this list to work on
-
-        // These are the currently running tasks.
-        std::unordered_map<TaskID, TaskRef> running_tasks;
-
-
-        // Keep track of mapping from a task to all other task that depend on it
-        // used when this task is completed to update the dependent task
-        // and schedule them if needed
-        std::unordered_map<TaskID, std::unordered_set<TaskRef>> dep_to_tasks;
-
-        void LaunchSleepingThreadOld(int threadId);
-        void LaunchSleepingThread2(int threadId);
-        bool handle_task_done2(TaskRef task_done); // notify other threads if there is change of state
-
         void LaunchSleepingThread(int threadId);
         bool handle_task_done(TaskID task_done); // notify other threads if there is change of state
 
         bool process_dependencies(TaskRef task, std::vector<TaskID>& deps);
         TaskRef getNextRunningTask(int threadId, bool check_only=false);
 
-        // When destroying the thread pool, use these flag to ensure threads exit their
-        // loop and cleanup
+        /* The number of threads in this thread pool*/
+        int num_threads_;
+
+        /* next available task id to use */
+        TaskID next_task_id{0};
+
+        /* Tasks waiting for tasks they dependent to finish */
+        std::unordered_set<TaskID> waiting_tasks;
+
+        /* Keep track of mapping from a task to all other tasks that depend on it */
+        std::unordered_map<TaskID, std::unordered_set<TaskRef>> dep_to_tasks;
+
+        /* currently running tasks. */
+        std::unordered_map<TaskID, TaskRef> running_tasks;
+
+        /* When destroying the thread pool, use these flag to ensure threads exit their
+        loop and cleanup */
         bool done{false}; 
 
+        /* Padded Mutex to avoid false sharing */
         struct paddedMutex{
             std::mutex m;
             char PAD[64];
         };
 
-        // Keep track of all threads launched by this thread pool
+        /* Each thread maintains it's own queue each having its own mutex to reduce contention */ 
         std::vector<std::thread> threads;
         std::vector<std::deque<TaskRef>> task_queue;
+
+        /* Synchornization primitives from main thread -> thread pools for  */ 
+        std::vector<std::condition_variable> condVarThreads;
         std::vector<paddedMutex> task_queue_mutexes;
 
-        // for waking up the pool of threads
-        std::vector<std::condition_variable> condVarThreads;
-        std::mutex threads_mtx;       
-
-        // for waking up the main thread waiting on sync
+        /* Synchornization primitive between thread pool -> main thread to exchange completed task */ 
         std::deque<TaskID> task_completed_queue;
         std::condition_variable sync_condVar;
         std::mutex sync_mtx;
