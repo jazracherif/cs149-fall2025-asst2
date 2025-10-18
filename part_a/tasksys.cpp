@@ -61,7 +61,7 @@ const char* TaskSystemParallelSpawn::name() {
 TaskSystemParallelSpawn::TaskSystemParallelSpawn(int num_threads): ITaskSystem(get_max_thread_pool_size(num_threads)), 
     max_num_threads_(get_max_thread_pool_size(num_threads)) {
     
-    curr_task_id = std::shared_ptr<std::atomic<int>>(new std::atomic<int>(0));
+    curr_task_id.store(0);
 
 }
 
@@ -71,9 +71,8 @@ TaskSystemParallelSpawn::~TaskSystemParallelSpawn() {}
 void TaskSystemParallelSpawn::parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks){
     int next_task = 0;
 
-
     while (true) {
-        (next_task = curr_task_id->fetch_add(1));   
+        (next_task = curr_task_id.fetch_add(1));   
         if (next_task >= num_total_tasks)
             break;
         runnable->runTask(next_task, num_total_tasks);
@@ -87,7 +86,7 @@ void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
     // printf("TaskSystemParallelSpawn::run()\n");
     // double start = CycleTimer::currentSeconds();
 
-    curr_task_id->store(0);
+    curr_task_id.store(0);
     for (int i = 0; i < max_num_threads_; i++){
         work.emplace_back(&TaskSystemParallelSpawn::parallelSpawnWork, this, runnable, i, num_total_tasks);
     }

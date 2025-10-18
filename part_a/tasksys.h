@@ -45,7 +45,7 @@ class TaskSystemParallelSpawn: public ITaskSystem {
     private:
         void parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks);
 
-        std::shared_ptr<std::atomic<int>> curr_task_id;
+        std::atomic<int> curr_task_id;
 
         // the max number of threads this System can use
         int max_num_threads_;
@@ -72,7 +72,7 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup
-        bool done; 
+        bool done{false}; 
 
         // Keep track of all threads launched by this thread pool
         std::vector<std::thread> threads;
@@ -89,7 +89,7 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
         int  curr_num_total_tasks;
         int max_num_threads_;
 
-        int bulk_run_id;
+        int bulk_run_id{0};
 };
 
 /*
@@ -113,7 +113,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup
-        bool done; 
+        bool done{false}; 
 
         // Keep track of all threads launched by this thread pool
         std::vector<std::thread> threads;
