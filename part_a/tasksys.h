@@ -45,6 +45,8 @@ class TaskSystemParallelSpawn: public ITaskSystem {
     private:
         void parallelSpawnWork(IRunnable* runnable, int threadId, int num_total_tasks);
 
+        std::atomic<int> curr_task_id;
+
         // the max number of threads this System can use
         int max_num_threads_;
 };
@@ -70,22 +72,24 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup
-        bool done; 
+        bool done{false}; 
 
         // Keep track of all threads launched by this thread pool
         std::vector<std::thread> threads;
 
         // Use the `curr_task_id` as an implicit ticket queue from which thread
         // pickup the next task id to work on
-        std::shared_ptr<std::atomic<int>> curr_task_id;
+        std::atomic<int> curr_task_id;
         
         // Task increment this counter when they are done with 1 piece of work
-        std::shared_ptr<std::atomic<int>> task_done;
+        std::atomic<int> tasks_completed;
 
         // Each call to run() will need to set the runnable and total number of tasks
         IRunnable *curr_runnable;
         int  curr_num_total_tasks;
+        int max_num_threads_;
 
+        int bulk_run_id{0};
 };
 
 /*
@@ -109,21 +113,21 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
 
         // When destroying the thread pool, use these flag to ensure threads exit their
         // loop and cleanup
-        bool done; 
+        bool done{false}; 
 
         // Keep track of all threads launched by this thread pool
         std::vector<std::thread> threads;
 
         // Use the `curr_task_id` as an implicit ticket queue from which thread
         // pickup the next task id to work on
-        std::shared_ptr<std::atomic<int>> curr_task_id;
+        std::atomic<int> curr_task_id;
         
         // Task increment this counter when they are done with 1 piece of work
-        std::shared_ptr<std::atomic<int>> task_done;
+        std::atomic<int> tasks_completed;
 
         // 
-        std::condition_variable condVar;
-        std::mutex mtx;
+        std::condition_variable condVarThreads;
+        std::mutex threads_mtx;
 
         // Each call to run() will need to set the runnable and total number of tasks
         IRunnable *curr_runnable;
